@@ -8,6 +8,9 @@ DEFAULT_DTYPE = tf.float32
 
 
 def default_init(scale):
+  """
+  Setting the initialization
+  """
   return tf.initializers.variance_scaling(scale=1e-10 if scale == 0 else scale, mode='fan_avg', distribution='uniform')
 
 
@@ -24,26 +27,40 @@ def debug_print(x, name):
 
 
 def flatten(x):
+  """
+  reshape the given layer into shape of [:, -1]
+  """
   return tf.reshape(x, [int(x.shape[0]), -1])
 
 
 def sumflat(x):
+  """
+  flatten the layer by use of reduce sum method
+  """
   return tf.reduce_sum(x, axis=list(range(1, len(x.shape))))
 
 
 def meanflat(x):
+  """
+  faltten the layer using mean value
+  """
   return tf.reduce_mean(x, axis=list(range(1, len(x.shape))))
 
 
 # ===== Neural network layers =====
 
 def _einsum(a, b, c, x, y):
+  """
+  recognize the index of the given tensor
+  """
   einsum_str = '{},{}->{}'.format(''.join(a), ''.join(b), ''.join(c))
   return tf.einsum(einsum_str, x, y)
 
 
 def contract_inner(x, y):
-  """tensordot(x, y, 1)."""
+  """
+  define a tensordot(x, y, 1)
+  """
   x_chars = list(string.ascii_lowercase[:len(x.shape)])
   y_chars = list(string.ascii_uppercase[:len(y.shape)])
   assert len(x_chars) == len(x.shape) and len(y_chars) == len(y.shape)
@@ -53,6 +70,9 @@ def contract_inner(x, y):
 
 
 def nin(x, *, name, num_units, init_scale=1.):
+  """
+  Generate a new layer y by contract the index of given x and another thensor W, then added by a bias tensor b
+  """
   with tf.variable_scope(name):
     in_dim = int(x.shape[-1])
     W = tf.get_variable('W', shape=[in_dim, num_units], initializer=default_init(scale=init_scale), dtype=DEFAULT_DTYPE)
@@ -63,6 +83,9 @@ def nin(x, *, name, num_units, init_scale=1.):
 
 
 def dense(x, *, name, num_units, init_scale=1., bias=True):
+  """
+  create a dense layer as usually tf function
+  """
   with tf.variable_scope(name):
     _, in_dim = x.shape
     W = tf.get_variable('W', shape=[in_dim, num_units], initializer=default_init(scale=init_scale), dtype=DEFAULT_DTYPE)
