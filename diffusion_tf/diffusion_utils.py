@@ -50,39 +50,40 @@ class GaussianDiffusion:
   """
 
   def __init__(self, *, betas, loss_type, tf_dtype=tf.float32):
-    self.loss_type = loss_type
+    self.loss_type = loss_type  #initial the Type loss
 
-    assert isinstance(betas, np.ndarray)
+    assert isinstance(betas, np.ndarray) # ensure whether betas is of np.ndarray
     self.np_betas = betas = betas.astype(np.float64)  # computations here in float64 for accuracy
-    assert (betas > 0).all() and (betas <= 1).all()
-    timesteps, = betas.shape
-    self.num_timesteps = int(timesteps)
+    assert (betas > 0).all() and (betas <= 1).all()  #break if beta have elements out of range (0,1]
+    timesteps, = betas.shape  #set the length of learning rate as the timesteps 
+    self.num_timesteps = int(timesteps)  # transform the type of timesteps
 
-    alphas = 1. - betas
-    alphas_cumprod = np.cumprod(alphas, axis=0)
-    alphas_cumprod_prev = np.append(1., alphas_cumprod[:-1])
-    assert alphas_cumprod_prev.shape == (timesteps,)
-
-    self.betas = tf.constant(betas, dtype=tf_dtype)
+    alphas = 1. - betas  # (\alpha_t) see the relationship above the equation (4)
+    alphas_cumprod = np.cumprod(alphas, axis=0) # \bar{\alpha_t} see the relationship above the equation (4)
+    alphas_cumprod_prev = np.append(1., alphas_cumprod[:-1]) # the previous alpha (\bar{\alpha_{t-1}})
+    assert alphas_cumprod_prev.shape == (timesteps,) # make sure the length of the previous alphabar
+    
+    # initial the beta and alpha
+    self.betas = tf.constant(betas, dtype=tf_dtype) 
     self.alphas_cumprod = tf.constant(alphas_cumprod, dtype=tf_dtype)
     self.alphas_cumprod_prev = tf.constant(alphas_cumprod_prev, dtype=tf_dtype)
 
     # calculations for diffusion q(x_t | x_{t-1}) and others
-    self.sqrt_alphas_cumprod = tf.constant(np.sqrt(alphas_cumprod), dtype=tf_dtype)
-    self.sqrt_one_minus_alphas_cumprod = tf.constant(np.sqrt(1. - alphas_cumprod), dtype=tf_dtype)
-    self.log_one_minus_alphas_cumprod = tf.constant(np.log(1. - alphas_cumprod), dtype=tf_dtype)
-    self.sqrt_recip_alphas_cumprod = tf.constant(np.sqrt(1. / alphas_cumprod), dtype=tf_dtype)
-    self.sqrt_recipm1_alphas_cumprod = tf.constant(np.sqrt(1. / alphas_cumprod - 1), dtype=tf_dtype)
+    self.sqrt_alphas_cumprod = tf.constant(np.sqrt(alphas_cumprod), dtype=tf_dtype)  # \sqrt{\bar{\alpha_t}}
+    self.sqrt_one_minus_alphas_cumprod = tf.constant(np.sqrt(1. - alphas_cumprod), dtype=tf_dtype) # \sqrt{ 1 - \bar{\alpha_t}}
+    self.log_one_minus_alphas_cumprod = tf.constant(np.log(1. - alphas_cumprod), dtype=tf_dtype) # \log{ 1 - \bar{\alpha_t}}
+    self.sqrt_recip_alphas_cumprod = tf.constant(np.sqrt(1. / alphas_cumprod), dtype=tf_dtype) # \sqrt{ 1 / \bar{\alpha_t}}
+    self.sqrt_recipm1_alphas_cumprod = tf.constant(np.sqrt(1. / alphas_cumprod - 1), dtype=tf_dtype) # \sqrt{ 1 / \bar{\alpha_t} - 1 }
 
     # calculations for posterior q(x_{t-1} | x_t, x_0)
-    posterior_variance = betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
+    posterior_variance = betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod) # \tilde{\beta}_t in Eqn. (7)
     # above: equal to 1. / (1. / (1. - alpha_cumprod_tm1) + alpha_t / beta_t)
-    self.posterior_variance = tf.constant(posterior_variance, dtype=tf_dtype)
+    self.posterior_variance = tf.constant(posterior_variance, dtype=tf_dtype) # initialization 
     # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
     self.posterior_log_variance_clipped = tf.constant(np.log(np.maximum(posterior_variance, 1e-20)), dtype=tf_dtype)
-    self.posterior_mean_coef1 = tf.constant(
+    self.posterior_mean_coef1 = tf.constant(    # the first term in Eqn. (7)
       betas * np.sqrt(alphas_cumprod_prev) / (1. - alphas_cumprod), dtype=tf_dtype)
-    self.posterior_mean_coef2 = tf.constant(
+    self.posterior_mean_coef2 = tf.constant(    # the second term in Eqn. (7)
       (1. - alphas_cumprod_prev) * np.sqrt(alphas) / (1. - alphas_cumprod), dtype=tf_dtype)
 
   @staticmethod
@@ -93,9 +94,9 @@ class GaussianDiffusion:
     """
     bs, = t.shape
     assert x_shape[0] == bs
-    out = tf.gather(a, t)
-    assert out.shape == [bs]
-    return tf.reshape(out, [bs] + ((len(x_shape) - 1) * [1]))
+    out = tf.gather(a, t) # out has the same length as array t, out[i] = a[t[i]]
+    assert out.shape == [bs] 
+    return tf.reshape(out, [bs] + ((len(x_shape) - 1) * [1])) # reshape to [batch_size, 1, 1, 1, 1, ...]
 
   def q_mean_variance(self, x_start, t):
     mean = self._extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
